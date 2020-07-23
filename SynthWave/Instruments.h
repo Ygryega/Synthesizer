@@ -1,5 +1,4 @@
 #include "Synth.h"
-//#include "Graph.h"
 using namespace synthesizer;
 
 #define FTYPE double
@@ -19,11 +18,11 @@ public:
 	SBell()
 	{
 		envelope.mAttackTime = 0.01;
-		envelope.mDecayTime = 3.0;
+		envelope.mDecayTime = 1.0;
 		envelope.mSustainAmplitude = 0.0;
 		envelope.mReleaseTime = 1.0;
 
-		dVolume = 1.0;	
+		dVolume = 1.0;
 	}
 
 	virtual FTYPE sound(const FTYPE dTime, synthesizer::SNote n, bool& bNoteFinished, FTYPE lHZ, FTYPE lAmplitude)
@@ -32,13 +31,13 @@ public:
 		FTYPE dAmplitude = synthesizer::UseEnvelope(dTime, envelope, n.on, n.off);
 		if (dAmplitude <= 0.0) bNoteFinished = true;
 
-		
+
 		FTYPE dSound =
-			+1.0 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id), synthesizer::SINE_WAVE, lHZ, lAmplitude);
-			//+ 0.50 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id + 24))
-			//+ 0.25 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id + 36));
-		
-		return dAmplitude * dSound *dVolume;
+			+1.0 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id + 12), synthesizer::SINE_WAVE, lHZ, lAmplitude)
+			+ 0.50 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id + 24))
+			+ 0.25 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id + 36));
+
+		return dAmplitude * dSound * dVolume;
 	}
 };
 
@@ -57,15 +56,15 @@ public:
 		dVolume = 1.0;
 	}
 
-	virtual FTYPE sound(const FTYPE dTime, synthesizer::SNote n, bool& bNoteFinished, FTYPE lHZ , FTYPE lAmplitude)
+	virtual FTYPE sound(const FTYPE dTime, synthesizer::SNote n, bool& bNoteFinished, FTYPE lHZ, FTYPE lAmplitude)
 	{
 		//FTYPE newAmplitude = 0.0;
 		FTYPE dAmplitude = synthesizer::UseEnvelope(dTime, envelope, n.on, n.off);
 		if (dAmplitude <= 0.0) bNoteFinished = true;
 
 		FTYPE dSound =
-			+1.0 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id + 12), synthesizer::SAW_TOOTH_ANALOG, lHZ, lAmplitude);
-	
+			+1.0 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id), synthesizer::SAW_TOOTH_ANALOG, lHZ, lAmplitude);
+
 		return dAmplitude * dSound * dVolume;
 	}
 
@@ -96,7 +95,7 @@ public:
 		if (dAmplitude <= 0.0) bNoteFinished = true;
 
 		FTYPE dSound =
-			+1.0 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id + 12), synthesizer::TRIANGLE_WAVE, lHZ, lAmplitude);
+			+1.0 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id), synthesizer::TRIANGLE_WAVE, lHZ, lAmplitude);
 
 		return dAmplitude * dSound * dVolume;
 	}
@@ -114,7 +113,7 @@ public:
 	SSquare()
 	{
 		envelope.mAttackTime = 0.01;
-		envelope.mDecayTime = 1.0;
+		envelope.mDecayTime = 3.0;
 		envelope.mSustainAmplitude = 0.0;
 		envelope.mReleaseTime = 1.0;
 		SineChoice = false;
@@ -128,9 +127,10 @@ public:
 		if (dAmplitude <= 0.0) bNoteFinished = true;
 
 		FTYPE dSound =
-			+1.0 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id + 12), synthesizer::SQUARE_WAVE, lHZ, lAmplitude);
+			+1.0 * synthesizer::COscillator(n.on - dTime, synthesizer::CSscaleConvert(n.id), synthesizer::SQUARE_WAVE, lHZ, lAmplitude);
 
-		return dAmplitude * dSound * dVolume;
+		//inclorporating the velocity of the key as the volume out put of the singular key
+		return dAmplitude * dSound * n.volume * 0.01;
 	}
 
 	FTYPE AddSine()
@@ -140,6 +140,7 @@ public:
 };
 
 vector<synthesizer::SNote> vecNotes;
+vector<synthesizer::SKnob> vecKnobs;
 mutex muxNotes;
 SBell instBell;
 SPiano instPiano;
@@ -159,21 +160,21 @@ void safe_remove(T& v, lambda f)
 }
 
 FTYPE IncreaseAmplitude = 0.001f;
-FTYPE IncreaseHZ = 1.0f;
+FTYPE IncreaseHZ = 2.0f;
 FTYPE dMixedOutput = 0.0;
 
 FTYPE MakeNoise(int nChannel, FTYPE dTime)
 {
 	dMixedOutput = 0.0;
-	unique_lock<mutex> lm(muxNotes);
+	//unique_lock<mutex> lm(muxNotes);
 	if (GetAsyncKeyState('D') & 0x8000)
 	{
-		IncreaseAmplitude += 0.0001;
+		IncreaseAmplitude += 0.00001;
 		// the 'A' key is currently being held down
 	}
 	if (GetAsyncKeyState('A') & 0x8000)
 	{
-		IncreaseAmplitude -= 0.0001;
+		IncreaseAmplitude -= 0.00001;
 		// the 'A' key is currently being held down
 	}
 	for (auto& n : vecNotes)
@@ -197,5 +198,5 @@ FTYPE MakeNoise(int nChannel, FTYPE dTime)
 	// Woah! Modern C++ Overload!!!
 	safe_remove<vector<synthesizer::SNote>>(vecNotes, [](synthesizer::SNote const& item) { return item.active; });
 
-	return dMixedOutput * 0.5f;
+	return dMixedOutput * 0.2;
 }

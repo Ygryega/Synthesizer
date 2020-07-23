@@ -1,10 +1,22 @@
-#pragma once
+﻿#pragma once
 using namespace std;
 #define FTYPE double
 #include "SoundDevice.h"
 
 namespace synthesizer
 {
+	enum EKnobId
+	{
+		K1,
+		K2,
+		K3,
+		K4,
+		K5,
+		K6,
+		K7,
+		K8,
+	};
+
 	//Converting Hz to angular velocity with the use of PI
 	FTYPE ConvHz_AngVel(const FTYPE mHertz)
 	{
@@ -14,7 +26,8 @@ namespace synthesizer
 	//A basic structure layout for a note can be used with any instrument
 	struct SNote
 	{
-		int id; //the current note rappresenting the position in the chosen scale
+		DWORD id; //the current note rappresenting the position in the chosen scale
+		DWORD volume;
 		int channel;
 		bool active;
 		FTYPE on;//activation time	
@@ -27,8 +40,29 @@ namespace synthesizer
 			off = 0.0;
 			active = false;
 			channel = 0;
+			volume = 0;
 		}
 	};
+
+	struct SKnob
+	{
+		DWORD id;
+		int channel;
+		bool active;
+		FTYPE on;
+		FTYPE off;
+
+		SKnob()
+		{
+			id = 0;
+			on = 0.0;
+			off = 0.0;
+			active = false;
+			channel = 0;
+		}
+	};
+
+
 
 	//Oscilator containing all of the various instruments
 	//all values are stored in integers and will be returning 
@@ -44,7 +78,7 @@ namespace synthesizer
 		const FTYPE mLFOHertz = 0.0f, const FTYPE mAmplitude = 0.0f, FTYPE mCustom = 50.0f)
 	{
 		FTYPE mFrequency = ConvHz_AngVel(mHertz) * mTime + mAmplitude * mHertz * (sin(ConvHz_AngVel(mLFOHertz) * mTime));
-
+		//cout << "frequency: " << mFrequency << endl;
 		switch (mType)
 		{
 		case SINE_WAVE: // Sine wave bewteen -1 and +1
@@ -76,10 +110,20 @@ namespace synthesizer
 	}
 
 	//it Converts the current note id to it's corrisponding frequency +
-
+	//m  =  12*log2(fm/440 Hz) + 69 
+	//f=440⋅2(n−69)/12
+	//= 69 + 12 log2(noteID / 440)
 	FTYPE CSscaleConvert(const int noteID)
 	{
-		return 256 * pow(1.0594630943592952645618252949463, noteID);
+		//return 440.0 * pow(2.0, (noteID - 69) / 12);
+		double d12th = pow(2.0, 1.0 / 12.0);
+		//noteID = noteID * 0.01;
+		//return 12 * log2((noteID / 100) / 440.0);
+		return 256 * pow(d12th, noteID);
+		//return 440 * log2(noteID - 69) / 12;
+		//return noteID * 0.256;
+		//return noteID;
+		//return 256 * pow(1.0594630943592952645618252949463, noteID);
 	}
 
 	struct SEnvelope
@@ -100,7 +144,7 @@ namespace synthesizer
 			mAttackTime = 0.1;
 			mDecayTime = 0.1;
 			mSustainAmplitude = 1.0;
-			mReleaseTime = 0.2;
+			mReleaseTime = 0.1;
 			mStartingAmplitude = 1.0;
 		}
 
@@ -150,7 +194,7 @@ namespace synthesizer
 				mAmplitude = 0.0f;
 			}
 			return mAmplitude;
-		} 
+		}
 	};
 
 	FTYPE UseEnvelope(const FTYPE mTime, SEnvelope& envelope, const FTYPE mTimeOn, const FTYPE mTimeOff)

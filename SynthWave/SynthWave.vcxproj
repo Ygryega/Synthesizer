@@ -23,7 +23,7 @@
     <ProjectGuid>{E604F95E-94EF-4FC5-9418-95CF638EF4FC}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>SynthWave</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

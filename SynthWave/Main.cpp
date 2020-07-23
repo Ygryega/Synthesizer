@@ -1,9 +1,144 @@
 #define FTYPE double
 #include"Instruments.h"
+#include<cstdlib>
+#include<windows.h>
+#include<Mmsystem.h>
+#include<stdio.h>
 #include "Common.h"
+
+vector<wstring> devices = CSoundDevice<short>::Enumerate();
+
+CSoundDevice<short> sound(devices[0], 44100, 1, 8, 512);
+
+
+DWORD tempWord;
+DWORD tempVel;
+
+void CALLBACK midiCallback(HMIDIIN handle, UINT uMsg, DWORD dwInstance, DWORD dwParam1, DWORD dwParam2)
+{
+
+	wcout << "dwInstance is " << dwInstance << endl;
+	wcout << "Handle is " << handle << endl;
+	wcout << "Bytes of the midi message is " << dwParam1 << endl; //dwParam1 is the bytes of the MIDI Message packed into an unsigned long
+	wcout << "Velocity is " << HIWORD(dwParam1) << endl; //velocity
+	wcout << "Key ID is " << LOWORD(dwParam1) << endl; //keyID
+	wcout << "Midi Data is " << HIBYTE(tempWord) << endl; //velocity
+	wcout << "Key Status is " << LOBYTE(tempWord) << endl; //keyID
+	wcout << "Time Stamp of keypress is " << dwParam2 << endl; //dwParam2 is the timestamp of key press
+	wcout << "uMsg is " << uMsg << endl;
+	wcout << "-----" << endl;
+
+	double dTimeNow = sound.GetTime();
+	tempWord = LOWORD(dwParam1);
+	tempVel = HIWORD(dwParam1);
+
+
+	DWORD newTemp = tempWord;
+	//short nKeyState = LOWORD(dwParam1);
+
+	muxNotes.lock();
+	auto noteFound = find_if(vecNotes.begin(), vecNotes.end(), [&newTemp](synthesizer::SNote const& item) { return item.active == true; });
+	//auto noteFound = vecNotes.begin();
+
+	if (noteFound == vecNotes.begin())//begin
+	{
+		bool noteActive = false;
+		// Note not found in vector
+		for (auto it = vecNotes.begin(); it != vecNotes.end(); ++it)
+		{
+			if (it->id == tempWord)
+			{
+				noteActive = true;
+			}
+		}
+		if (noteActive == false)
+		{
+			if (HIWORD(dwParam1) != 0)
+			{
+				//synthesizer::SKnob k;
+				//if (tempWord == 432) { k.id = tempWord; k.active = true; vecKnobs.emplace_back(k); }
+				//else if (tempWord == 688) { k.id = tempWord; k.active = true; vecKnobs.emplace_back(k); }
+				//else if (tempWord == 944) { k.id = tempWord; k.active = true; vecKnobs.emplace_back(k); }
+				//else if (tempWord == 1200) { k.id = tempWord; k.active = true; vecKnobs.emplace_back(k); }
+				//else if (tempWord == 3090) { k.id = tempWord; k.active = true; vecKnobs.emplace_back(k); }
+				//else if (tempWord == 1712) { k.id = tempWord; k.active = true; vecKnobs.emplace_back(k); }
+				//else if (tempWord == 1968) { k.id = tempWord; k.active = true; vecKnobs.emplace_back(k); }
+				//else if (tempWord == 2226) { k.id = tempWord; k.active = true; vecKnobs.emplace_back(k); }
+				//// Key has been pressed so create a new note
+				////double temp = double(dwParam1);
+				//else
+				//{
+					synthesizer::SNote n;
+					n.id = HIBYTE(tempWord);// LOWORD(dwParam1);
+					n.on = dTimeNow;
+					n.channel = 2;
+					n.active = true;
+					//n.volume = tempVel;
+					// Add note to vector
+					vecNotes.emplace_back(n);
+				//}
+			}
+			else
+			{
+				// Note not in vector, but key has been released...
+				// ...nothing to do
+				//vecNotes.clear();
+				tempWord = NULL;
+			}
+		}
+	}
+	else
+	{
+		// Note exists in vector
+		if (HIWORD(dwParam1) != 0)
+		{
+			// Key is still held, so do nothing
+			if (noteFound->off > noteFound->on)
+			{
+				// Key has been pressed again during release phase
+				noteFound->on = dTimeNow;
+				//noteFound->active = true;
+			}
+		}
+		else
+		{
+			// Key has been released, so switch off
+			if (noteFound->off < noteFound->on)
+			{
+				noteFound->off = dTimeNow;
+				noteFound->active = false;
+			}
+
+		}
+	}
+	muxNotes.unlock();
+
+}
 
 int main()
 {
+	MIDIINCAPS      mic;
+	MIDIOUTCAPS	outcaps;
+
+	unsigned long result;
+	HMIDIIN      inHandle;
+	HMIDIOUT    outHandle;
+
+	unsigned long    iNumDevs, i;
+	iNumDevs = midiInGetNumDevs();  /* Get the number of MIDI In devices in this computer */
+	int nMidiDevices = midiOutGetNumDevs();
+	//wcout << "Out Devices : " << nMidiDevices << endl;
+	for (int x = 0; x < nMidiDevices; x++)
+	{
+		/* Get info about the next device */
+		if (!midiOutGetDevCaps(x, &outcaps, sizeof(MIDIINCAPS)))
+		{
+			wcout << "OutDevice ID [" << x << "]: " << outcaps.szPname << endl;
+		}
+	}
+
+
+
 	//Current loop Used to determine at which point in the buffer we are 
 	size_t Current_i = 0;
 
@@ -16,7 +151,6 @@ int main()
 
 	bool run = true;
 
-	vector<wstring> devices = CSoundDevice<short>::Enumerate();
 
 	for (auto d : devices)
 	{
@@ -25,7 +159,6 @@ int main()
 	cout << endl;
 
 	// Create sound machine!!
-	CSoundDevice<short> sound(devices[0], 44100, 1, 8, 512);
 
 	// Link noise function with sound machine
 	sound.SetExternalFunction(MakeNoise);
@@ -46,6 +179,11 @@ int main()
 	cout << "Press W to Increas HZ" << endl;
 	cout << "Press S to Decrease HZ" << endl;
 	int Channel = 1;
+	
+	if (midiOutOpen(&outHandle, 1, NULL, 0, NULL) == MMSYSERR_NOERROR)
+	{
+		std::cout << "Opened midi" << std::endl;
+	}
 
 	while (run)
 	{
@@ -86,60 +224,47 @@ int main()
 				IncreaseHZ -= 0.01;
 			}
 
-			short nKeyState = GetAsyncKeyState((unsigned char)("ZSXCFVGBNJMK\xbcL\xbe\xbf"[k]));
-
+			//short nKeyState = GetAsyncKeyState((unsigned char)("ZSXCFVGBNJMK\xbcL\xbe\xbf"[k]));
 			double dTimeNow = sound.GetTime();
-
 			// Check if note already exists in currently playing notes
-			muxNotes.lock();
-			auto noteFound = find_if(vecNotes.begin(), vecNotes.end(), [&k](synthesizer::SNote const& item) { return item.id == k; });
-			if (noteFound == vecNotes.end())
+			result = midiInOpen(&inHandle, 0, (DWORD)midiCallback, NULL, CALLBACK_FUNCTION);
+			if (GetAsyncKeyState('P') & 0x8000)
 			{
-				// Note not found in vector
-
-				if (nKeyState & 0x8000)
-				{
-					// Key has been pressed so create a new note
-					synthesizer::SNote n;
-					n.id = k;
-					n.on = dTimeNow;
-					n.channel = Channel;
-					n.active = true;
-					Current_i = 0;
-
-					// Add note to vector
-					vecNotes.emplace_back(n);
-				}
-				else
-				{
-					// Note not in vector, but key has been released...
-					// ...nothing to do
-				}
+				midiOutShortMsg(outHandle, 0x00403C90);
 			}
 			else
 			{
-				// Note exists in vector
-				if (nKeyState & 0x8000)
+				//midiOutShortMsg(outHandle, 0x00003C80);
+			}
+			for (auto i = vecNotes.begin(); i != vecNotes.end(); ++i)
+			{
+				if (tempWord != 0)
 				{
-					// Key is still held, so do nothing
-					if (noteFound->off > noteFound->on)
+					if (tempWord == i->id)
 					{
-						// Key has been pressed again during release phase
-						noteFound->on = dTimeNow;
-						noteFound->active = true;
-						Current_i = 0;
+						if (i->off > i->on)
+						{
+							// Key has been pressed again during release phase
+							i->on = dTimeNow;
+							//matchFound = false;
+							//noteFound->active = true;
+
+							//i->volume = tempVel;
+						}
 					}
 				}
 				else
 				{
 					// Key has been released, so switch off
-					if (noteFound->off < noteFound->on)
+					if (i->off < i->on)
 					{
-						noteFound->off = dTimeNow;
+						i->off = dTimeNow;
+						//i->active = false;
 					}
 				}
 			}
-			muxNotes.unlock();
+			//result = midiInOpen(&inHandle, 0, 0, 0, 0);
+			midiInStart(inHandle);
 		}
 
 		wcout << "\rNotes: " << vecNotes.size() << "    ";
@@ -190,6 +315,12 @@ int main()
 		if (dMixedOutput == 0)
 		{
 			y_data1[Current_i] = y_data1[Current_i - 1];
+			Current_i++;
+		}
+		else
+		{
+			y_data1[Current_i] = dMixedOutput;
+			Current_i++;
 		}
 		/*else if (dMixedOutput <= dMixedOutput + 10 && dMixedOutput >= dMixedOutput + 10)
 		{
@@ -199,14 +330,9 @@ int main()
 		{
 			y_data1[Current_i] = y_data1[Current_i - 1];
 		}*/
-		else
-		{
-			y_data1[Current_i] = dMixedOutput;
-		}
 		
 		//y_data2[Current_i] = dMixedOutput * 2;
 		//y_data3[Current_i] = dMixedOutput / 2;
-		Current_i++;
 
 		int mouseX, mouseY;
 		const int buttons = SDL_GetMouseState(&mouseX, &mouseY);
